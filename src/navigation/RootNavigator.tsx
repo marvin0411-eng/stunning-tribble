@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React from 'react';
+import * as SplashScreen from 'expo-splash-screen';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import FoodScreen from '../screens/FoodScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -12,6 +13,8 @@ import WeightScreen from '../screens/WeightScreen';
 import { WorkoutDetailScreen, WorkoutsListScreen, WorkoutsStackParamList } from '../screens/WorkoutsScreen';
 import { useApp } from '../storage/AppContext';
 import { colors } from '../theme/theme';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const Tab = createBottomTabNavigator();
 const WorkoutsStack = createNativeStackNavigator<WorkoutsStackParamList>();
@@ -61,6 +64,12 @@ function MainTabs() {
 
 export default function RootNavigator() {
   const { loading, profile } = useApp();
+
+  useEffect(() => {
+    if (!loading) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [loading]);
 
   if (loading) {
     return (
