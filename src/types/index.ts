@@ -11,6 +11,8 @@ export interface UserProfile {
   activityLevel: ActivityLevel;
   units: UnitSystem;
   createdAt: string;
+  reminderEnabled?: boolean;
+  reminderHour?: number;
 }
 
 export interface WeightEntry {
@@ -26,6 +28,11 @@ export interface FoodEntry {
   meal: Meal;
   name: string;
   calories: number;
+}
+
+export interface WaterDay {
+  dateISO: string;
+  cups: number;
 }
 
 export interface Exercise {

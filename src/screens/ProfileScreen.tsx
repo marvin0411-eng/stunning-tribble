@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, LabeledInput, Pill, PrimaryButton, SegmentedControl } from '../components/ui';
 import { useApp } from '../storage/AppContext';
@@ -13,14 +13,54 @@ import {
   formatWeight,
   lbToKg,
 } from '../utils/calculations';
+import { cancelDailyReminder, scheduleDailyReminder } from '../utils/notifications';
 import { UnitSystem } from '../types';
+
+const REMINDER_TIMES = [
+  { label: 'Morning (8am)', hour: 8 },
+  { label: 'Midday (12pm)', hour: 12 },
+  { label: 'Evening (6pm)', hour: 18 },
+  { label: 'Night (8pm)', hour: 20 },
+];
 
 export default function ProfileScreen() {
   const { profile, latestWeightKg, updateProfile, resetAllData } = useApp();
   const [goalInput, setGoalInput] = useState('');
   const [editingGoal, setEditingGoal] = useState(false);
+  const [reminderBusy, setReminderBusy] = useState(false);
 
   if (!profile) return null;
+
+  const reminderHour = profile.reminderHour ?? 18;
+
+  const onToggleReminder = async (enabled: boolean) => {
+    setReminderBusy(true);
+    if (enabled) {
+      const granted = await scheduleDailyReminder(reminderHour);
+      if (!granted) {
+        Alert.alert(
+          'Notifications disabled',
+          'Enable notifications for this app in your device settings to receive daily reminders.'
+        );
+        setReminderBusy(false);
+        return;
+      }
+      await updateProfile({ reminderEnabled: true, reminderHour });
+    } else {
+      await cancelDailyReminder();
+      await updateProfile({ reminderEnabled: false });
+    }
+    setReminderBusy(false);
+  };
+
+  const onChangeReminderHour = async (hour: number) => {
+    await updateProfile({ reminderHour: hour });
+    if (profile.reminderEnabled) {
+      setReminderBusy(true);
+      await scheduleDailyReminder(hour);
+      setReminderBusy(false);
+    }
+  };
 
   const bmr = calculateBMR(latestWeightKg, profile.heightCm, profile.age);
   const tdee = calculateTDEE(bmr, profile.activityLevel);
@@ -144,6 +184,31 @@ export default function ProfileScreen() {
           )}
         </Card>
 
+        <Card style={{ marginTop: spacing.md }}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.cardTitle}>Daily reminder</Text>
+            <Switch
+              value={!!profile.reminderEnabled}
+              onValueChange={onToggleReminder}
+              disabled={reminderBusy}
+              trackColor={{ true: colors.primary, false: colors.border }}
+            />
+          </View>
+          <Text style={styles.footnote}>Get a gentle nudge to log your weight, food, or a workout.</Text>
+          {profile.reminderEnabled && (
+            <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+              {REMINDER_TIMES.map((t) => (
+                <PrimaryButton
+                  key={t.hour}
+                  title={t.label}
+                  variant={reminderHour === t.hour ? 'primary' : 'outline'}
+                  onPress={() => onChangeReminderHour(t.hour)}
+                />
+              ))}
+            </View>
+          )}
+        </Card>
+
         <View style={{ marginTop: spacing.xl }}>
           <PrimaryButton title="Reset all data" variant="outline" onPress={confirmReset} />
         </View>
@@ -158,6 +223,7 @@ const styles = StyleSheet.create({
   title: { ...typography.h1, color: colors.text },
   subtitle: { ...typography.body, color: colors.textMuted, marginTop: 2 },
   cardTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.sm },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

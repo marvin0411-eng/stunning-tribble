@@ -93,3 +93,36 @@ export function estimatedWeeksToGoal(currentWeightKg: number, goalWeightKg: numb
 export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+function isoDaysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Consecutive days (ending today or yesterday) with at least one food entry logged. */
+export function calculateLoggingStreak(loggedDates: string[]): number {
+  const daySet = new Set(loggedDates);
+  const startsToday = daySet.has(todayISO());
+  let streak = 0;
+  let offset = startsToday ? 0 : 1;
+  if (!startsToday && !daySet.has(isoDaysAgo(1))) return 0;
+  while (daySet.has(isoDaysAgo(offset))) {
+    streak += 1;
+    offset += 1;
+  }
+  return streak;
+}
+
+/** Weight change over the last ~7 days: latest entry minus the closest entry from 7+ days ago. Negative = loss. */
+export function calculateWeeklyWeightChangeKg(
+  entries: { dateISO: string; weightKg: number }[]
+): number | null {
+  if (entries.length < 2) return null;
+  const sorted = [...entries].sort((a, b) => (a.dateISO < b.dateISO ? 1 : -1));
+  const latest = sorted[0];
+  const weekAgoCutoff = isoDaysAgo(7);
+  const reference = sorted.find((e) => e.dateISO <= weekAgoCutoff) ?? sorted[sorted.length - 1];
+  if (reference.dateISO === latest.dateISO) return null;
+  return latest.weightKg - reference.weightKg;
+}

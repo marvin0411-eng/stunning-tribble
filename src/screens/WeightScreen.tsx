@@ -17,11 +17,13 @@ import { LineChart } from '../components/LineChart';
 import { useApp } from '../storage/AppContext';
 import { colors, spacing, typography } from '../theme/theme';
 import { bmiCategory, calculateBMI, formatWeight, kgToLb, lbToKg, todayISO } from '../utils/calculations';
+import { WeightEntry } from '../types';
 
 export default function WeightScreen() {
-  const { profile, weightEntries, addWeightEntry, deleteWeightEntry } = useApp();
+  const { profile, weightEntries, addWeightEntry, editWeightEntry, deleteWeightEntry } = useApp();
   const { width } = useWindowDimensions();
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<WeightEntry | null>(null);
   const [input, setInput] = useState('');
 
   const sorted = useMemo(
@@ -36,6 +38,19 @@ export default function WeightScreen() {
   const latest = sorted.length > 0 ? sorted[sorted.length - 1].weightKg : profile.startWeightKg;
   const bmi = calculateBMI(latest, profile.heightCm);
 
+  const openAdd = () => {
+    setEditingEntry(null);
+    setInput('');
+    setModalVisible(true);
+  };
+
+  const openEdit = (entry: WeightEntry) => {
+    setEditingEntry(entry);
+    const displayValue = profile.units === 'metric' ? entry.weightKg : kgToLb(entry.weightKg);
+    setInput(displayValue.toFixed(1));
+    setModalVisible(true);
+  };
+
   const submit = async () => {
     const raw = Number(input);
     if (!raw || raw <= 0) {
@@ -43,8 +58,13 @@ export default function WeightScreen() {
       return;
     }
     const weightKg = profile.units === 'metric' ? raw : lbToKg(raw);
-    await addWeightEntry(weightKg, todayISO());
+    if (editingEntry) {
+      await editWeightEntry(editingEntry.id, weightKg);
+    } else {
+      await addWeightEntry(weightKg, todayISO());
+    }
     setInput('');
+    setEditingEntry(null);
     setModalVisible(false);
   };
 
@@ -52,7 +72,7 @@ export default function WeightScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Weight</Text>
-        <Pressable style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <Pressable style={styles.addButton} onPress={openAdd}>
           <Text style={styles.addButtonText}>+ Log weight</Text>
         </Pressable>
       </View>
@@ -85,17 +105,19 @@ export default function WeightScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <Card style={{ marginBottom: spacing.sm }}>
-            <View style={styles.rowBetween}>
-              <View>
-                <Text style={styles.entryWeight}>{formatWeight(item.weightKg, profile.units)}</Text>
-                <Text style={styles.smallMuted}>{item.dateISO}</Text>
+          <Pressable onPress={() => openEdit(item)}>
+            <Card style={{ marginBottom: spacing.sm }}>
+              <View style={styles.rowBetween}>
+                <View>
+                  <Text style={styles.entryWeight}>{formatWeight(item.weightKg, profile.units)}</Text>
+                  <Text style={styles.smallMuted}>{item.dateISO}</Text>
+                </View>
+                <Pressable onPress={() => deleteWeightEntry(item.id)} hitSlop={8}>
+                  <Text style={styles.deleteText}>Remove</Text>
+                </Pressable>
               </View>
-              <Pressable onPress={() => deleteWeightEntry(item.id)}>
-                <Text style={styles.deleteText}>Remove</Text>
-              </Pressable>
-            </View>
-          </Card>
+            </Card>
+          </Pressable>
         )}
         ListEmptyComponent={
           <Text style={[styles.smallMuted, { textAlign: 'center', marginTop: spacing.lg }]}>
@@ -107,7 +129,7 @@ export default function WeightScreen() {
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalWrap}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Log today's weight</Text>
+            <Text style={styles.modalTitle}>{editingEntry ? 'Edit weight entry' : "Log today's weight"}</Text>
             <LabeledInput
               label={`Weight (${profile.units === 'metric' ? 'kg' : 'lb'})`}
               value={input}

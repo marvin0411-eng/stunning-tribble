@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { FoodEntry, UserProfile, WeightEntry } from '../types';
+import { FoodEntry, UserProfile, WaterDay, WeightEntry } from '../types';
 import {
   clearAllData,
   loadFoodEntries,
   loadProfile,
+  loadWaterDays,
   loadWeightEntries,
   saveFoodEntries,
   saveProfile,
+  saveWaterDays,
   saveWeightEntries,
 } from './storage';
 import { todayISO } from '../utils/calculations';
@@ -16,13 +18,18 @@ interface AppContextValue {
   profile: UserProfile | null;
   weightEntries: WeightEntry[];
   foodEntries: FoodEntry[];
+  waterDays: WaterDay[];
   latestWeightKg: number;
+  todayWaterCups: number;
   setProfile: (profile: UserProfile) => Promise<void>;
   updateProfile: (partial: Partial<UserProfile>) => Promise<void>;
   addWeightEntry: (weightKg: number, dateISO?: string, note?: string) => Promise<void>;
+  editWeightEntry: (id: string, weightKg: number) => Promise<void>;
   deleteWeightEntry: (id: string) => Promise<void>;
   addFoodEntry: (entry: Omit<FoodEntry, 'id'>) => Promise<void>;
+  editFoodEntry: (id: string, partial: Partial<Omit<FoodEntry, 'id'>>) => Promise<void>;
   deleteFoodEntry: (id: string) => Promise<void>;
+  setTodayWaterCups: (cups: number) => Promise<void>;
   resetAllData: () => Promise<void>;
 }
 
@@ -37,13 +44,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfileState] = useState<UserProfile | null>(null);
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
   const [foodEntries, setFoodEntries] = useState<FoodEntry[]>([]);
+  const [waterDays, setWaterDays] = useState<WaterDay[]>([]);
 
   useEffect(() => {
     (async () => {
-      const [p, w, f] = await Promise.all([loadProfile(), loadWeightEntries(), loadFoodEntries()]);
+      const [p, w, f, wd] = await Promise.all([
+        loadProfile(),
+        loadWeightEntries(),
+        loadFoodEntries(),
+        loadWaterDays(),
+      ]);
       setProfileState(p);
       setWeightEntries(w);
       setFoodEntries(f);
+      setWaterDays(wd);
       setLoading(false);
     })();
   }, []);
@@ -53,6 +67,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const sorted = [...weightEntries].sort((a, b) => (a.dateISO < b.dateISO ? 1 : -1));
     return sorted[0].weightKg;
   }, [weightEntries, profile]);
+
+  const todayWaterCups = useMemo(() => {
+    const today = todayISO();
+    return waterDays.find((d) => d.dateISO === today)?.cups ?? 0;
+  }, [waterDays]);
 
   const setProfile = async (next: UserProfile) => {
     setProfileState(next);
@@ -79,6 +98,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await saveWeightEntries(next);
   };
 
+  const editWeightEntry = async (id: string, weightKg: number) => {
+    const next = weightEntries.map((e) => (e.id === id ? { ...e, weightKg } : e));
+    setWeightEntries(next);
+    await saveWeightEntries(next);
+  };
+
   const deleteWeightEntry = async (id: string) => {
     const next = weightEntries.filter((e) => e.id !== id);
     setWeightEntries(next);
@@ -91,10 +116,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await saveFoodEntries(next);
   };
 
+  const editFoodEntry = async (id: string, partial: Partial<Omit<FoodEntry, 'id'>>) => {
+    const next = foodEntries.map((e) => (e.id === id ? { ...e, ...partial } : e));
+    setFoodEntries(next);
+    await saveFoodEntries(next);
+  };
+
   const deleteFoodEntry = async (id: string) => {
     const next = foodEntries.filter((e) => e.id !== id);
     setFoodEntries(next);
     await saveFoodEntries(next);
+  };
+
+  const setTodayWaterCups = async (cups: number) => {
+    const today = todayISO();
+    const clamped = Math.max(0, cups);
+    const next = [{ dateISO: today, cups: clamped }, ...waterDays.filter((d) => d.dateISO !== today)];
+    setWaterDays(next);
+    await saveWaterDays(next);
   };
 
   const resetAllData = async () => {
@@ -102,6 +141,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProfileState(null);
     setWeightEntries([]);
     setFoodEntries([]);
+    setWaterDays([]);
   };
 
   const value: AppContextValue = {
@@ -109,13 +149,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     profile,
     weightEntries,
     foodEntries,
+    waterDays,
     latestWeightKg,
+    todayWaterCups,
     setProfile,
     updateProfile,
     addWeightEntry,
+    editWeightEntry,
     deleteWeightEntry,
     addFoodEntry,
+    editFoodEntry,
     deleteFoodEntry,
+    setTodayWaterCups,
     resetAllData,
   };
 

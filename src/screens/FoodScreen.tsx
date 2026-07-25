@@ -15,7 +15,7 @@ import { Card, LabeledInput, Pill, PrimaryButton, ProgressBar } from '../compone
 import { useApp } from '../storage/AppContext';
 import { colors, spacing, typography } from '../theme/theme';
 import { calculateDailyCalorieTarget, todayISO } from '../utils/calculations';
-import { Meal } from '../types';
+import { FoodEntry, Meal } from '../types';
 
 const MEALS: { key: Meal; label: string; emoji: string }[] = [
   { key: 'breakfast', label: 'Breakfast', emoji: '🍳' },
@@ -25,8 +25,9 @@ const MEALS: { key: Meal; label: string; emoji: string }[] = [
 ];
 
 export default function FoodScreen() {
-  const { profile, foodEntries, latestWeightKg, addFoodEntry, deleteFoodEntry } = useApp();
+  const { profile, foodEntries, latestWeightKg, addFoodEntry, editFoodEntry, deleteFoodEntry } = useApp();
   const [modalMeal, setModalMeal] = useState<Meal | null>(null);
+  const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null);
   const [name, setName] = useState('');
   const [calories, setCalories] = useState('');
 
@@ -37,10 +38,23 @@ export default function FoodScreen() {
   const target = calculateDailyCalorieTarget(latestWeightKg, profile.heightCm, profile.age, profile.activityLevel);
   const consumed = todays.reduce((sum, e) => sum + e.calories, 0);
 
-  const openModal = (meal: Meal) => {
+  const openAddModal = (meal: Meal) => {
+    setEditingEntry(null);
     setModalMeal(meal);
     setName('');
     setCalories('');
+  };
+
+  const openEditModal = (entry: FoodEntry) => {
+    setEditingEntry(entry);
+    setModalMeal(entry.meal);
+    setName(entry.name);
+    setCalories(String(entry.calories));
+  };
+
+  const closeModal = () => {
+    setModalMeal(null);
+    setEditingEntry(null);
   };
 
   const submit = async () => {
@@ -53,8 +67,12 @@ export default function FoodScreen() {
       Alert.alert('Invalid calories', 'Enter a positive calorie amount.');
       return;
     }
-    await addFoodEntry({ dateISO: todayISO(), meal: modalMeal as Meal, name: name.trim(), calories: cal });
-    setModalMeal(null);
+    if (editingEntry) {
+      await editFoodEntry(editingEntry.id, { name: name.trim(), calories: cal });
+    } else {
+      await addFoodEntry({ dateISO: todayISO(), meal: modalMeal as Meal, name: name.trim(), calories: cal });
+    }
+    closeModal();
   };
 
   return (
@@ -87,19 +105,21 @@ export default function FoodScreen() {
                 <Text style={styles.smallMuted}>{mealTotal} kcal</Text>
               </View>
               {entries.map((e) => (
-                <Card key={e.id} style={{ marginTop: spacing.sm }}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.entryName}>{e.name}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-                      <Text style={styles.smallMuted}>{e.calories} kcal</Text>
-                      <Pressable onPress={() => deleteFoodEntry(e.id)}>
-                        <Text style={styles.deleteText}>Remove</Text>
-                      </Pressable>
+                <Pressable key={e.id} onPress={() => openEditModal(e)}>
+                  <Card style={{ marginTop: spacing.sm }}>
+                    <View style={styles.rowBetween}>
+                      <Text style={styles.entryName}>{e.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                        <Text style={styles.smallMuted}>{e.calories} kcal</Text>
+                        <Pressable onPress={() => deleteFoodEntry(e.id)} hitSlop={8}>
+                          <Text style={styles.deleteText}>Remove</Text>
+                        </Pressable>
+                      </View>
                     </View>
-                  </View>
-                </Card>
+                  </Card>
+                </Pressable>
               ))}
-              <Pressable style={styles.addRow} onPress={() => openModal(meal.key)}>
+              <Pressable style={styles.addRow} onPress={() => openAddModal(meal.key)}>
                 <Text style={styles.addRowText}>+ Add food to {meal.label.toLowerCase()}</Text>
               </Pressable>
             </View>
@@ -107,10 +127,10 @@ export default function FoodScreen() {
         })}
       </ScrollView>
 
-      <Modal visible={modalMeal !== null} transparent animationType="slide" onRequestClose={() => setModalMeal(null)}>
+      <Modal visible={modalMeal !== null} transparent animationType="slide" onRequestClose={closeModal}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalWrap}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add food</Text>
+            <Text style={styles.modalTitle}>{editingEntry ? 'Edit food' : 'Add food'}</Text>
             <LabeledInput label="Food name" value={name} onChangeText={setName} placeholder="Greek yogurt" />
             <LabeledInput
               label="Calories"
@@ -121,10 +141,10 @@ export default function FoodScreen() {
             />
             <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
               <View style={{ flex: 1 }}>
-                <PrimaryButton title="Cancel" variant="outline" onPress={() => setModalMeal(null)} />
+                <PrimaryButton title="Cancel" variant="outline" onPress={closeModal} />
               </View>
               <View style={{ flex: 1 }}>
-                <PrimaryButton title="Add" onPress={submit} />
+                <PrimaryButton title={editingEntry ? 'Save' : 'Add'} onPress={submit} />
               </View>
             </View>
           </View>
