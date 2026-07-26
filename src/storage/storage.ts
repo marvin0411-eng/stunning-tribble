@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FoodEntry, UserProfile, WaterDay, WeightEntry } from '../types';
+import { FoodEntry, UserProfile, WaterDay, WeightEntry, WorkoutLogEntry } from '../types';
 
 const KEYS = {
   profile: '@bloom/profile',
   weightEntries: '@bloom/weightEntries',
   foodEntries: '@bloom/foodEntries',
   waterDays: '@bloom/waterDays',
+  workoutLogs: '@bloom/workoutLogs',
 };
 
 export async function loadProfile(): Promise<UserProfile | null> {
@@ -44,6 +45,21 @@ export async function saveWaterDays(days: WaterDay[]): Promise<void> {
   await AsyncStorage.setItem(KEYS.waterDays, JSON.stringify(days));
 }
 
+export async function loadWorkoutLogs(): Promise<WorkoutLogEntry[]> {
+  const raw = await AsyncStorage.getItem(KEYS.workoutLogs);
+  return raw ? (JSON.parse(raw) as WorkoutLogEntry[]) : [];
+}
+
+export async function saveWorkoutLogs(logs: WorkoutLogEntry[]): Promise<void> {
+  await AsyncStorage.setItem(KEYS.workoutLogs, JSON.stringify(logs));
+}
+
 export async function clearAllData(): Promise<void> {
-  await AsyncStorage.multiRemove([KEYS.profile, KEYS.weightEntries, KEYS.foodEntries, KEYS.waterDays]);
+  await AsyncStorage.multiRemove([
+    KEYS.profile,
+    KEYS.weightEntries,
+    KEYS.foodEntries,
+    KEYS.waterDays,
+    KEYS.workoutLogs,
+  ]);
 }

@@ -2,8 +2,9 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, Pill } from '../components/ui';
+import { Card, Pill, PrimaryButton } from '../components/ui';
 import { WORKOUT_PLANS } from '../data/workouts';
+import { useApp } from '../storage/AppContext';
 import { colors, spacing, typography } from '../theme/theme';
 import { WorkoutPlan } from '../types';
 
@@ -36,12 +37,14 @@ export function WorkoutsListScreen({ navigation }: ListProps) {
 }
 
 function WorkoutCard({ plan, onPress }: { plan: WorkoutPlan; onPress: () => void }) {
+  const { isWorkoutDoneToday } = useApp();
+  const doneToday = isWorkoutDoneToday(plan.id);
   return (
     <Pressable onPress={onPress}>
       <Card>
         <View style={styles.rowBetween}>
           <Pill text={plan.category} />
-          <Text style={styles.smallMuted}>{plan.durationMinutes} min</Text>
+          {doneToday ? <Pill text="✓ Done today" tone="success" /> : <Text style={styles.smallMuted}>{plan.durationMinutes} min</Text>}
         </View>
         <Text style={styles.cardTitle}>{plan.title}</Text>
         <Text style={styles.cardDesc} numberOfLines={2}>
@@ -55,7 +58,10 @@ function WorkoutCard({ plan, onPress }: { plan: WorkoutPlan; onPress: () => void
 
 export function WorkoutDetailScreen({ route }: DetailProps) {
   const plan = WORKOUT_PLANS.find((p) => p.id === route.params.workoutId);
+  const { isWorkoutDoneToday, logWorkoutToday, unlogWorkoutToday } = useApp();
   if (!plan) return null;
+
+  const doneToday = isWorkoutDoneToday(plan.id);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -68,6 +74,14 @@ export function WorkoutDetailScreen({ route }: DetailProps) {
           <Stat label="Duration" value={`${plan.durationMinutes} min`} />
           <Stat label="Est. burn" value={`~${plan.caloriesBurnEstimate} kcal`} />
           <Stat label="Level" value={plan.level} />
+        </View>
+
+        <View style={{ marginTop: spacing.lg }}>
+          <PrimaryButton
+            title={doneToday ? '✓ Done today — tap to undo' : 'Mark as done today'}
+            variant={doneToday ? 'primary' : 'outline'}
+            onPress={() => (doneToday ? unlogWorkoutToday(plan.id) : logWorkoutToday(plan.id))}
+          />
         </View>
 
         <Text style={styles.sectionTitle}>Exercises</Text>

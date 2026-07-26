@@ -50,3 +50,9 @@ export interface WorkoutPlan {
   description: string;
   exercises: Exercise[];
 }
+
+export interface WorkoutLogEntry {
+  id: string;
+  dateISO: string;
+  workoutId: string;
+}

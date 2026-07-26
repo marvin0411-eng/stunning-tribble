@@ -16,7 +16,8 @@ import {
 } from '../utils/calculations';
 
 export default function HomeScreen() {
-  const { profile, foodEntries, weightEntries, latestWeightKg, todayWaterCups, setTodayWaterCups } = useApp();
+  const { profile, foodEntries, weightEntries, workoutLogs, latestWeightKg, todayWaterCups, setTodayWaterCups } =
+    useApp();
 
   const todaysFood = useMemo(
     () => foodEntries.filter((e) => e.dateISO === todayISO()),
@@ -25,8 +26,12 @@ export default function HomeScreen() {
   const caloriesConsumed = todaysFood.reduce((sum, e) => sum + e.calories, 0);
 
   const streak = useMemo(
-    () => calculateLoggingStreak(foodEntries.map((e) => e.dateISO)),
-    [foodEntries]
+    () =>
+      calculateLoggingStreak([
+        ...foodEntries.map((e) => e.dateISO),
+        ...workoutLogs.map((l) => l.dateISO),
+      ]),
+    [foodEntries, workoutLogs]
   );
   const weeklyChangeKg = useMemo(() => calculateWeeklyWeightChangeKg(weightEntries), [weightEntries]);
 

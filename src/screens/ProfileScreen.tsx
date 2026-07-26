@@ -9,12 +9,15 @@ import {
   calculateBMR,
   calculateDailyCalorieTarget,
   calculateTDEE,
+  cmToFeetInches,
+  feetInchesToCm,
   formatHeight,
   formatWeight,
+  kgToLb,
   lbToKg,
 } from '../utils/calculations';
 import { cancelDailyReminder, scheduleDailyReminder } from '../utils/notifications';
-import { UnitSystem } from '../types';
+import { ActivityLevel, UnitSystem } from '../types';
 
 const REMINDER_TIMES = [
   { label: 'Morning (8am)', hour: 8 },
@@ -25,9 +28,15 @@ const REMINDER_TIMES = [
 
 export default function ProfileScreen() {
   const { profile, latestWeightKg, updateProfile, resetAllData } = useApp();
-  const [goalInput, setGoalInput] = useState('');
-  const [editingGoal, setEditingGoal] = useState(false);
   const [reminderBusy, setReminderBusy] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [ageInput, setAgeInput] = useState('');
+  const [heightCmInput, setHeightCmInput] = useState('');
+  const [heightFeetInput, setHeightFeetInput] = useState('');
+  const [heightInchesInput, setHeightInchesInput] = useState('');
+  const [goalInput, setGoalInput] = useState('');
+  const [activityInput, setActivityInput] = useState<ActivityLevel>('light');
+  const [detailsError, setDetailsError] = useState('');
 
   if (!profile) return null;
 
@@ -68,16 +77,56 @@ export default function ProfileScreen() {
 
   const toggleUnits = (units: UnitSystem) => updateProfile({ units });
 
-  const saveGoal = () => {
-    const raw = Number(goalInput);
-    if (!raw || raw <= 0) {
-      Alert.alert('Invalid goal', 'Please enter a valid goal weight.');
+  const openEditDetails = () => {
+    setAgeInput(String(profile.age));
+    if (profile.units === 'metric') {
+      setHeightCmInput(String(Math.round(profile.heightCm)));
+    } else {
+      const { feet, inches } = cmToFeetInches(profile.heightCm);
+      setHeightFeetInput(String(feet));
+      setHeightInchesInput(String(inches));
+    }
+    const goalDisplay = profile.units === 'metric' ? profile.goalWeightKg : kgToLb(profile.goalWeightKg);
+    setGoalInput(goalDisplay.toFixed(1));
+    setActivityInput(profile.activityLevel);
+    setDetailsError('');
+    setEditingDetails(true);
+  };
+
+  const saveDetails = () => {
+    setDetailsError('');
+    const age = Number(ageInput);
+    if (!age || age < 13 || age > 100) {
+      setDetailsError('Please enter a valid age (13-100).');
       return;
     }
-    const goalWeightKg = profile.units === 'metric' ? raw : lbToKg(raw);
-    updateProfile({ goalWeightKg });
-    setEditingGoal(false);
-    setGoalInput('');
+
+    let heightCm: number;
+    if (profile.units === 'metric') {
+      heightCm = Number(heightCmInput);
+      if (!heightCm || heightCm < 100 || heightCm > 250) {
+        setDetailsError('Please enter a valid height in cm.');
+        return;
+      }
+    } else {
+      const feet = Number(heightFeetInput);
+      const inches = Number(heightInchesInput || '0');
+      if (!feet || feet < 3 || feet > 8 || inches < 0 || inches > 11) {
+        setDetailsError('Please enter a valid height.');
+        return;
+      }
+      heightCm = feetInchesToCm(feet, inches);
+    }
+
+    const rawGoal = Number(goalInput);
+    if (!rawGoal || rawGoal <= 0) {
+      setDetailsError('Please enter a valid goal weight.');
+      return;
+    }
+    const goalWeightKg = profile.units === 'metric' ? rawGoal : lbToKg(rawGoal);
+
+    updateProfile({ age, heightCm, goalWeightKg, activityLevel: activityInput });
+    setEditingDetails(false);
   };
 
   const confirmReset = () => {
@@ -158,28 +207,67 @@ export default function ProfileScreen() {
         </Card>
 
         <Card style={{ marginTop: spacing.md }}>
-          <Text style={styles.cardTitle}>Update goal weight</Text>
-          {editingGoal ? (
+          <Text style={styles.cardTitle}>Edit details</Text>
+          {editingDetails ? (
             <View style={{ marginTop: spacing.sm }}>
+              <LabeledInput label="Age" value={ageInput} onChangeText={setAgeInput} keyboardType="number-pad" />
+              {profile.units === 'metric' ? (
+                <LabeledInput
+                  label="Height (cm)"
+                  value={heightCmInput}
+                  onChangeText={setHeightCmInput}
+                  keyboardType="number-pad"
+                />
+              ) : (
+                <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                  <View style={{ flex: 1 }}>
+                    <LabeledInput
+                      label="Height (ft)"
+                      value={heightFeetInput}
+                      onChangeText={setHeightFeetInput}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <LabeledInput
+                      label="Height (in)"
+                      value={heightInchesInput}
+                      onChangeText={setHeightInchesInput}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+              )}
               <LabeledInput
-                label={`New goal (${profile.units === 'metric' ? 'kg' : 'lb'})`}
+                label={`Goal weight (${profile.units === 'metric' ? 'kg' : 'lb'})`}
                 value={goalInput}
                 onChangeText={setGoalInput}
                 keyboardType="decimal-pad"
-                autoFocus
               />
+              <Text style={styles.label}>Activity level</Text>
+              <View style={{ gap: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.md }}>
+                {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((level) => (
+                  <PrimaryButton
+                    key={level}
+                    title={ACTIVITY_LABELS[level]}
+                    variant={activityInput === level ? 'primary' : 'outline'}
+                    onPress={() => setActivityInput(level)}
+                  />
+                ))}
+              </View>
+              {!!detailsError && <Text style={styles.errorText}>{detailsError}</Text>}
               <View style={{ flexDirection: 'row', gap: spacing.md }}>
                 <View style={{ flex: 1 }}>
-                  <PrimaryButton title="Cancel" variant="outline" onPress={() => setEditingGoal(false)} />
+                  <PrimaryButton title="Cancel" variant="outline" onPress={() => setEditingDetails(false)} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <PrimaryButton title="Save" onPress={saveGoal} />
+                  <PrimaryButton title="Save" onPress={saveDetails} />
                 </View>
               </View>
             </View>
           ) : (
             <View style={{ marginTop: spacing.sm }}>
-              <PrimaryButton title="Change goal weight" variant="outline" onPress={() => setEditingGoal(true)} />
+              <PrimaryButton title="Edit age, height, goal & activity" variant="outline" onPress={openEditDetails} />
             </View>
           )}
         </Card>
@@ -235,4 +323,6 @@ const styles = StyleSheet.create({
   statLabel: { ...typography.body, color: colors.textMuted },
   statValue: { ...typography.body, color: colors.text, fontWeight: '700' },
   footnote: { ...typography.small, color: colors.textMuted, marginTop: spacing.sm, lineHeight: 18 },
+  label: { ...typography.label, color: colors.textMuted },
+  errorText: { color: colors.danger, fontSize: 13, marginBottom: spacing.sm },
 });

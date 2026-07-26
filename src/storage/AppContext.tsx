@@ -1,15 +1,17 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { FoodEntry, UserProfile, WaterDay, WeightEntry } from '../types';
+import { FoodEntry, UserProfile, WaterDay, WeightEntry, WorkoutLogEntry } from '../types';
 import {
   clearAllData,
   loadFoodEntries,
   loadProfile,
   loadWaterDays,
   loadWeightEntries,
+  loadWorkoutLogs,
   saveFoodEntries,
   saveProfile,
   saveWaterDays,
   saveWeightEntries,
+  saveWorkoutLogs,
 } from './storage';
 import { todayISO } from '../utils/calculations';
 
@@ -19,6 +21,7 @@ interface AppContextValue {
   weightEntries: WeightEntry[];
   foodEntries: FoodEntry[];
   waterDays: WaterDay[];
+  workoutLogs: WorkoutLogEntry[];
   latestWeightKg: number;
   todayWaterCups: number;
   setProfile: (profile: UserProfile) => Promise<void>;
@@ -30,6 +33,9 @@ interface AppContextValue {
   editFoodEntry: (id: string, partial: Partial<Omit<FoodEntry, 'id'>>) => Promise<void>;
   deleteFoodEntry: (id: string) => Promise<void>;
   setTodayWaterCups: (cups: number) => Promise<void>;
+  logWorkoutToday: (workoutId: string) => Promise<void>;
+  unlogWorkoutToday: (workoutId: string) => Promise<void>;
+  isWorkoutDoneToday: (workoutId: string) => boolean;
   resetAllData: () => Promise<void>;
 }
 
@@ -45,19 +51,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
   const [foodEntries, setFoodEntries] = useState<FoodEntry[]>([]);
   const [waterDays, setWaterDays] = useState<WaterDay[]>([]);
+  const [workoutLogs, setWorkoutLogs] = useState<WorkoutLogEntry[]>([]);
 
   useEffect(() => {
     (async () => {
-      const [p, w, f, wd] = await Promise.all([
+      const [p, w, f, wd, wl] = await Promise.all([
         loadProfile(),
         loadWeightEntries(),
         loadFoodEntries(),
         loadWaterDays(),
+        loadWorkoutLogs(),
       ]);
       setProfileState(p);
       setWeightEntries(w);
       setFoodEntries(f);
       setWaterDays(wd);
+      setWorkoutLogs(wl);
       setLoading(false);
     })();
   }, []);
@@ -136,12 +145,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await saveWaterDays(next);
   };
 
+  const logWorkoutToday = async (workoutId: string) => {
+    const today = todayISO();
+    if (workoutLogs.some((l) => l.workoutId === workoutId && l.dateISO === today)) return;
+    const next = [{ id: makeId(), dateISO: today, workoutId }, ...workoutLogs];
+    setWorkoutLogs(next);
+    await saveWorkoutLogs(next);
+  };
+
+  const unlogWorkoutToday = async (workoutId: string) => {
+    const today = todayISO();
+    const next = workoutLogs.filter((l) => !(l.workoutId === workoutId && l.dateISO === today));
+    setWorkoutLogs(next);
+    await saveWorkoutLogs(next);
+  };
+
+  const isWorkoutDoneToday = (workoutId: string) => {
+    const today = todayISO();
+    return workoutLogs.some((l) => l.workoutId === workoutId && l.dateISO === today);
+  };
+
   const resetAllData = async () => {
     await clearAllData();
     setProfileState(null);
     setWeightEntries([]);
     setFoodEntries([]);
     setWaterDays([]);
+    setWorkoutLogs([]);
   };
 
   const value: AppContextValue = {
@@ -150,6 +180,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     weightEntries,
     foodEntries,
     waterDays,
+    workoutLogs,
     latestWeightKg,
     todayWaterCups,
     setProfile,
@@ -161,6 +192,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     editFoodEntry,
     deleteFoodEntry,
     setTodayWaterCups,
+    logWorkoutToday,
+    unlogWorkoutToday,
+    isWorkoutDoneToday,
     resetAllData,
   };
 
